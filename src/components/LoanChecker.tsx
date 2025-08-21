@@ -24,34 +24,63 @@ interface LoanResult {
   message: string;
 }
 
-// Simulated regression coefficients from the Python analysis
+// Model coefficients from the Python analysis (intercept, credit_score, income, loan_amount, term)
 const BETA = [0.15, -0.0003, 0.000002, 0.000015, 0.002];
-const THRESHOLD = 0.08;
-const STD_RESID = 0.04;
+const MODEL_RMSE = 0.04; // Training RMSE from model
+
+// Validation ranges
+const VALIDATION_RANGES = {
+  apr: { min: 0, max: 40, label: "APR" },
+  income: { min: 100, max: 50000, label: "Monthly Income" },
+  creditScore: { min: 300, max: 850, label: "Credit Score" },
+  loanAmount: { min: 1000, max: 35000, label: "Loan Amount" }
+};
+
+const validateInput = (loan: LoanData): string | null => {
+  const apr = parseFloat(loan.apr);
+  const income = parseFloat(loan.monthlyIncome);
+  const creditScore = parseFloat(loan.creditScore);
+  const loanAmount = parseFloat(loan.loanAmount);
+
+  if (apr < VALIDATION_RANGES.apr.min || apr > VALIDATION_RANGES.apr.max) {
+    return `${VALIDATION_RANGES.apr.label} must be between ${VALIDATION_RANGES.apr.min}% and ${VALIDATION_RANGES.apr.max}%`;
+  }
+  if (income < VALIDATION_RANGES.income.min || income > VALIDATION_RANGES.income.max) {
+    return `${VALIDATION_RANGES.income.label} must be between $${VALIDATION_RANGES.income.min.toLocaleString()} and $${VALIDATION_RANGES.income.max.toLocaleString()}`;
+  }
+  if (creditScore < VALIDATION_RANGES.creditScore.min || creditScore > VALIDATION_RANGES.creditScore.max) {
+    return `${VALIDATION_RANGES.creditScore.label} must be between ${VALIDATION_RANGES.creditScore.min} and ${VALIDATION_RANGES.creditScore.max}`;
+  }
+  if (loanAmount < VALIDATION_RANGES.loanAmount.min || loanAmount > VALIDATION_RANGES.loanAmount.max) {
+    return `${VALIDATION_RANGES.loanAmount.label} must be between $${VALIDATION_RANGES.loanAmount.min.toLocaleString()} and $${VALIDATION_RANGES.loanAmount.max.toLocaleString()}`;
+  }
+
+  return null;
+};
 
 const analyzeLoan = (loan: LoanData): LoanResult => {
   const creditScore = parseFloat(loan.creditScore);
   const monthlyIncome = parseFloat(loan.monthlyIncome);
   const loanAmount = parseFloat(loan.loanAmount);
   const term = parseFloat(loan.term);
-  const apr = parseFloat(loan.apr) / 100;
+  const apr = parseFloat(loan.apr) / 100; // Convert to decimal
 
-  // Feature vector: [1, credit_score, income, loan_amount, term]
+  // Build feature vector: [1, credit_score, income, loan_amount, term]
   const x = [1, creditScore, monthlyIncome, loanAmount, term];
   
-  // Calculate predicted APR
+  // Calculate predicted APR (in decimal)
   const predictedAPR = x.reduce((sum, val, idx) => sum + val * BETA[idx], 0);
   
-  // Current inflation adjustment (simulated)
-  const currentInflation = 0.002;
-  const adjustedAPR = apr - currentInflation;
+  // Clip prediction to reasonable range
+  const clippedPrediction = Math.max(0, Math.min(1, predictedAPR));
   
-  // Calculate residual
-  const residual = adjustedAPR - predictedAPR;
+  // Calculate difference
+  const diff = apr - clippedPrediction;
+  const diffInRMSEs = diff / MODEL_RMSE;
   
-  // Determine flags
-  const flagged = residual > THRESHOLD;
-  const negotiable = residual > STD_RESID;
+  // Determine flags based on RMSE thresholds
+  const flagged = apr > clippedPrediction + 2.0 * MODEL_RMSE;
+  const negotiable = apr > clippedPrediction + 0.5 * MODEL_RMSE;
   
   let message = "";
   if (flagged) {
@@ -63,9 +92,9 @@ const analyzeLoan = (loan: LoanData): LoanResult => {
   }
 
   return {
-    predictedAPR: predictedAPR * 100,
-    adjustedAPR: adjustedAPR * 100,
-    residual: residual * 100,
+    predictedAPR: clippedPrediction * 100,
+    adjustedAPR: apr * 100,
+    residual: diff * 100,
     flagged,
     negotiable,
     message
@@ -83,12 +112,17 @@ export const LoanChecker = () => {
   
   const [result, setResult] = useState<LoanResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleInputChange = (field: keyof LoanData, value: string) => {
     setLoanData(prev => ({
       ...prev,
       [field]: value
     }));
+    // Clear validation error when user starts typing
+    if (validationError) {
+      setValidationError(null);
+    }
   };
 
   const handleAnalyze = () => {
@@ -96,7 +130,15 @@ export const LoanChecker = () => {
       return;
     }
 
+    // Validate input ranges
+    const validationErrorMsg = validateInput(loanData);
+    if (validationErrorMsg) {
+      setValidationError(validationErrorMsg);
+      return;
+    }
+
     setIsLoading(true);
+    setValidationError(null);
     
     // Simulate analysis delay
     setTimeout(() => {
@@ -115,6 +157,7 @@ export const LoanChecker = () => {
       apr: ""
     });
     setResult(null);
+    setValidationError(null);
   };
 
   const isFormValid = Object.values(loanData).every(value => value !== "");
@@ -208,6 +251,13 @@ export const LoanChecker = () => {
                   onChange={(e) => handleInputChange("apr", e.target.value)}
                 />
               </div>
+
+              {validationError && (
+                <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                  <AlertCircle className="w-4 h-4" />
+                  {validationError}
+                </div>
+              )}
 
               <div className="flex gap-4 pt-4">
                 <Button

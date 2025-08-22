@@ -162,13 +162,53 @@ export const LoanChecker = () => {
   const [result, setResult] = useState<LoanResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{[key: string]: string}>({});
+
+  const validateField = (field: keyof LoanData, value: string): string | null => {
+    if (!value) return null;
+    
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return null;
+
+    switch (field) {
+      case "creditScore":
+        if (numValue < VALIDATION_RANGES.creditScore.min || numValue > VALIDATION_RANGES.creditScore.max) {
+          return `Must be between ${VALIDATION_RANGES.creditScore.min}-${VALIDATION_RANGES.creditScore.max}`;
+        }
+        break;
+      case "monthlyIncome":
+        if (numValue > VALIDATION_RANGES.income.max) {
+          return `Must be less than $${VALIDATION_RANGES.income.max.toLocaleString()}`;
+        }
+        break;
+      case "loanAmount":
+        if (numValue < VALIDATION_RANGES.loanAmount.min || numValue > VALIDATION_RANGES.loanAmount.max) {
+          return `Must be between $${VALIDATION_RANGES.loanAmount.min.toLocaleString()}-$${VALIDATION_RANGES.loanAmount.max.toLocaleString()}`;
+        }
+        break;
+      case "apr":
+        if (numValue < VALIDATION_RANGES.apr.min || numValue > VALIDATION_RANGES.apr.max) {
+          return `Must be between ${VALIDATION_RANGES.apr.min}%-${VALIDATION_RANGES.apr.max}%`;
+        }
+        break;
+    }
+    return null;
+  };
 
   const handleInputChange = (field: keyof LoanData, value: string) => {
     setLoanData(prev => ({
       ...prev,
       [field]: value
     }));
-    // Clear validation error when user starts typing
+
+    // Real-time validation
+    const error = validateField(field, value);
+    setFieldErrors(prev => ({
+      ...prev,
+      [field]: error || ""
+    }));
+
+    // Clear general validation error when user starts typing
     if (validationError) {
       setValidationError(null);
     }
@@ -219,9 +259,14 @@ export const LoanChecker = () => {
           <h1 className="text-4xl md:text-6xl font-bold bg-gradient-primary bg-clip-text text-transparent">
             Loan Fairness Analyzer
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Check if your loan APR is fair based on your financial profile and market data
-          </p>
+          <div className="max-w-2xl mx-auto space-y-2">
+            <p className="text-xl text-muted-foreground">
+              Check if your loan's APR* is fair based on your financial profile.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              *This tool works best for unsecured loans
+            </p>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
@@ -245,6 +290,9 @@ export const LoanChecker = () => {
                   value={loanData.creditScore}
                   onChange={(e) => handleInputChange("creditScore", e.target.value)}
                 />
+                {fieldErrors.creditScore && (
+                  <p className="text-sm text-destructive">{fieldErrors.creditScore}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -257,6 +305,9 @@ export const LoanChecker = () => {
                   value={loanData.monthlyIncome}
                   onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
                 />
+                {fieldErrors.monthlyIncome && (
+                  <p className="text-sm text-destructive">{fieldErrors.monthlyIncome}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -269,6 +320,9 @@ export const LoanChecker = () => {
                   value={loanData.loanAmount}
                   onChange={(e) => handleInputChange("loanAmount", e.target.value)}
                 />
+                {fieldErrors.loanAmount && (
+                  <p className="text-sm text-destructive">{fieldErrors.loanAmount}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -299,6 +353,9 @@ export const LoanChecker = () => {
                   value={loanData.apr}
                   onChange={(e) => handleInputChange("apr", e.target.value)}
                 />
+                {fieldErrors.apr && (
+                  <p className="text-sm text-destructive">{fieldErrors.apr}</p>
+                )}
               </div>
 
               {validationError && (

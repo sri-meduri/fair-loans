@@ -224,7 +224,7 @@ export const LoanChecker = () => {
             Loan Fairness Analyzer
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Check if your loan APR is fair based on your financial profile and market data
+            Check if your loan's APR is fair based on your financial profile and market data
           </p>
         </div>
 

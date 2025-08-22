@@ -24,16 +24,98 @@ interface LoanResult {
   message: string;
 }
 
-// Model coefficients from the Python analysis (intercept, credit_score, income, loan_amount, term)
-const BETA = [0.15, -0.0003, 0.000002, 0.000015, 0.002];
-const MODEL_RMSE = 0.04; // Training RMSE from model
-
 // Validation ranges
 const VALIDATION_RANGES = {
   apr: { min: 0, max: 40, label: "APR" },
-  income: { min: 100, max: 50000, label: "Monthly Income" },
+  income: { min: 0, max: 50000, label: "Monthly Income" },
   creditScore: { min: 300, max: 850, label: "Credit Score" },
-  loanAmount: { min: 1000, max: 35000, label: "Loan Amount" }
+  loanAmount: { min: 1000, max: 30000, label: "Loan Amount" }
+};
+
+const sanitizeInputs = (creditScore: number, monthlyIncome: number, loanAmount: number, term: number) => {
+  const cs = Math.max(300.0, Math.min(850.0, creditScore));
+  const inc = Math.max(1.0, monthlyIncome);
+  const loan = Math.max(0.0, loanAmount);
+  const termVal = Math.max(1.0, term);
+  return { cs, inc, loan, termVal };
+};
+
+const predictAPROnly = (creditScore: number, monthlyIncome: number, loanAmount: number, term: number): number => {
+  const { cs, inc, loan, termVal } = sanitizeInputs(creditScore, monthlyIncome, loanAmount, term);
+
+  // Derived features
+  const logIncome = Math.log1p(inc);
+  const monthlyPayment = loan / termVal;
+  const dti = loan / inc;
+
+  // Formula components
+  const intercept = 0.12;
+
+  // Credit effect: each point above/below 700 changes APR by about 0.00015
+  const creditCoef = -0.00015;
+  const creditTerm = creditCoef * (cs - 700.0);
+
+  // Income effect (log scale): higher log income reduces APR
+  const incomeAnchor = Math.log1p(5000.0);
+  const incomeCoef = -0.006;
+  const incomeTerm = incomeCoef * (logIncome - incomeAnchor);
+
+  // Loan effect: small positive effect per dollar
+  const loanAnchor = 10000.0;
+  const loanCoef = 0.000004;
+  const loanTerm = loanCoef * (loan - loanAnchor);
+
+  // Term effect: 60-month loans slightly higher
+  const termTerm = termVal >= 60.0 ? 0.005 : 0.0;
+
+  // DTI penalty: if loan/income substantially > 3, apply linear penalty
+  let dtiPenalty = 0.0;
+  if (dti > 3.0) {
+    dtiPenalty = 0.015 * (dti - 3.0);
+  }
+
+  // Monthly payment small effect
+  const monthlyPaymentTerm = 0.00002 * monthlyPayment;
+
+  // Combine terms
+  let apr = intercept;
+  apr += creditTerm;
+  apr += incomeTerm;
+  apr += loanTerm;
+  apr += termTerm;
+  apr += dtiPenalty;
+  apr += monthlyPaymentTerm;
+
+  // Final clipping to realistic band [0, 0.40] (0% - 40%)
+  return Math.max(0.0, Math.min(0.40, apr));
+};
+
+const predictAndFlag = (offeredAPR: number, creditScore: number, monthlyIncome: number, loanAmount: number, term: number, relTol: number = 0.05) => {
+  const offered = offeredAPR / 100; // Convert percent to decimal
+  const pred = predictAPROnly(creditScore, monthlyIncome, loanAmount, term);
+
+  let message = "";
+  let flagged = false;
+  let negotiable = false;
+
+  if (offered > pred + relTol) {
+    message = `⚠️ Your offered APR is high compared to the predicted APR (${(offered * 100).toFixed(2)}% vs predicted ${(pred * 100).toFixed(2)}%). Consider shopping around.`;
+    flagged = true;
+  } else if (offered < pred - relTol) {
+    message = `✅ Your offered APR is lower than the predicted APR (${(offered * 100).toFixed(2)}% vs predicted ${(pred * 100).toFixed(2)}%). That's a good deal.`;
+  } else {
+    message = `🤝 Your offered APR is within the expected range (${(offered * 100).toFixed(2)}% vs predicted ${(pred * 100).toFixed(2)}%).`;
+    negotiable = offered > pred;
+  }
+
+  return {
+    predictedAPR: pred * 100,
+    adjustedAPR: offered * 100,
+    residual: (offered - pred) * 100,
+    flagged,
+    negotiable,
+    message
+  };
 };
 
 const validateInput = (loan: LoanData): string | null => {
@@ -46,7 +128,7 @@ const validateInput = (loan: LoanData): string | null => {
     return `${VALIDATION_RANGES.apr.label} must be between ${VALIDATION_RANGES.apr.min}% and ${VALIDATION_RANGES.apr.max}%`;
   }
   if (income < VALIDATION_RANGES.income.min || income > VALIDATION_RANGES.income.max) {
-    return `${VALIDATION_RANGES.income.label} must be between $${VALIDATION_RANGES.income.min.toLocaleString()} and $${VALIDATION_RANGES.income.max.toLocaleString()}`;
+    return `${VALIDATION_RANGES.income.label} must be less than $${VALIDATION_RANGES.income.max.toLocaleString()}`;
   }
   if (creditScore < VALIDATION_RANGES.creditScore.min || creditScore > VALIDATION_RANGES.creditScore.max) {
     return `${VALIDATION_RANGES.creditScore.label} must be between ${VALIDATION_RANGES.creditScore.min} and ${VALIDATION_RANGES.creditScore.max}`;
@@ -63,42 +145,9 @@ const analyzeLoan = (loan: LoanData): LoanResult => {
   const monthlyIncome = parseFloat(loan.monthlyIncome);
   const loanAmount = parseFloat(loan.loanAmount);
   const term = parseFloat(loan.term);
-  const apr = parseFloat(loan.apr) / 100; // Convert to decimal
+  const apr = parseFloat(loan.apr);
 
-  // Build feature vector: [1, credit_score, income, loan_amount, term]
-  const x = [1, creditScore, monthlyIncome, loanAmount, term];
-  
-  // Calculate predicted APR (in decimal)
-  const predictedAPR = x.reduce((sum, val, idx) => sum + val * BETA[idx], 0);
-  
-  // Clip prediction to reasonable range
-  const clippedPrediction = Math.max(0, Math.min(1, predictedAPR));
-  
-  // Calculate difference
-  const diff = apr - clippedPrediction;
-  const diffInRMSEs = diff / MODEL_RMSE;
-  
-  // Determine flags based on RMSE thresholds
-  const flagged = apr > clippedPrediction + 2.0 * MODEL_RMSE;
-  const negotiable = apr > clippedPrediction + 0.5 * MODEL_RMSE;
-  
-  let message = "";
-  if (flagged) {
-    message = "⚠️ Your loan's APR is unusually high compared to similar loans. Consider shopping around or negotiating.";
-  } else if (negotiable) {
-    message = "Your loan's APR is pretty reasonable, but consider negotiating.";
-  } else {
-    message = "✅ Your loan's APR looks reasonable based on your profile.";
-  }
-
-  return {
-    predictedAPR: clippedPrediction * 100,
-    adjustedAPR: apr * 100,
-    residual: diff * 100,
-    flagged,
-    negotiable,
-    message
-  };
+  return predictAndFlag(apr, creditScore, monthlyIncome, loanAmount, term);
 };
 
 export const LoanChecker = () => {

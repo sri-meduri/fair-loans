@@ -327,7 +327,7 @@ export const LoanChecker = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="term">Loan Term (months)</Label>
-                <Select onValueChange={(value) => handleInputChange("term", value)}>
+                <Select value={loanData.term} onValueChange={(value) => handleInputChange("term", value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select loan term" />
                   </SelectTrigger>

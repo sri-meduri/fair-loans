@@ -27,9 +27,9 @@ interface LoanResult {
 // Validation ranges
 const VALIDATION_RANGES = {
   apr: { min: 0, max: 40, label: "APR" },
-  income: { min: 500, max: 50000, label: "Monthly Income" },
+  income: { min: 0, max: 50000, label: "Monthly Income" },
   creditScore: { min: 300, max: 850, label: "Credit Score" },
-  loanAmount: { min: 1000, max: 100000, label: "Loan Amount" }
+  loanAmount: { min: 1000, max: 30000, label: "Loan Amount" }
 };
 
 const sanitizeInputs = (creditScore: number, monthlyIncome: number, loanAmount: number, term: number) => {
@@ -128,7 +128,7 @@ const validateInput = (loan: LoanData): string | null => {
     return `${VALIDATION_RANGES.apr.label} must be between ${VALIDATION_RANGES.apr.min}% and ${VALIDATION_RANGES.apr.max}%`;
   }
   if (income < VALIDATION_RANGES.income.min || income > VALIDATION_RANGES.income.max) {
-    return `${VALIDATION_RANGES.income.label} must be between $${VALIDATION_RANGES.income.min.toLocaleString()} and $${VALIDATION_RANGES.income.max.toLocaleString()}`;
+    return `${VALIDATION_RANGES.income.label} must be less than $${VALIDATION_RANGES.income.max.toLocaleString()}`;
   }
   if (creditScore < VALIDATION_RANGES.creditScore.min || creditScore > VALIDATION_RANGES.creditScore.max) {
     return `${VALIDATION_RANGES.creditScore.label} must be between ${VALIDATION_RANGES.creditScore.min} and ${VALIDATION_RANGES.creditScore.max}`;
@@ -177,8 +177,8 @@ export const LoanChecker = () => {
         }
         break;
       case "monthlyIncome":
-        if (numValue < VALIDATION_RANGES.income.min || numValue > VALIDATION_RANGES.income.max) {
-          return `Must be between $${VALIDATION_RANGES.income.min.toLocaleString()}-$${VALIDATION_RANGES.income.max.toLocaleString()}`;
+        if (numValue > VALIDATION_RANGES.income.max) {
+          return `Must be less than $${VALIDATION_RANGES.income.max.toLocaleString()}`;
         }
         break;
       case "loanAmount":

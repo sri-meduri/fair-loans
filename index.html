@@ -15,6 +15,19 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <!-- Critical CSS for initial render -->
+    <style>
+      *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}
+      html,body{height:100%}
+      body{margin:0;line-height:inherit;font-family:ui-sans-serif,system-ui,sans-serif}
+      #root{min-height:100vh;background-color:hsl(0 0% 100%);color:hsl(222.2 84% 4.9%)}
+      @media (prefers-color-scheme:dark){#root{background-color:hsl(222.2 84% 4.9%);color:hsl(210 40% 98%)}}
+    </style>
+    
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   </head>
 
   <body>

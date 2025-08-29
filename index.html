@@ -15,49 +15,6 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-    
-    <!-- Critical CSS for initial render -->
-    <style>
-      *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}
-      html,body{height:100%}
-      body{margin:0;line-height:inherit;font-family:ui-sans-serif,system-ui,sans-serif}
-      #root{min-height:100vh;background-color:hsl(0 0% 100%);color:hsl(222.2 84% 4.9%)}
-      @media (prefers-color-scheme:dark){#root{background-color:hsl(222.2 84% 4.9%);color:hsl(210 40% 98%)}}
-    </style>
-    
-    <!-- Preload critical resources -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Async CSS loading to prevent render blocking -->
-    <script>
-      // Preload CSS as non-render-blocking resource
-      document.addEventListener('DOMContentLoaded', function() {
-        const links = document.getElementsByTagName('link');
-        for (let i = 0; i < links.length; i++) {
-          const link = links[i];
-          if (link.rel === 'stylesheet' && link.href.includes('.css')) {
-            // Clone the link element
-            const preloadLink = document.createElement('link');
-            preloadLink.rel = 'preload';
-            preloadLink.as = 'style';
-            preloadLink.href = link.href;
-            preloadLink.onload = function() {
-              link.rel = 'stylesheet';
-              link.media = 'all';
-            };
-            
-            // Set original link to not block rendering
-            link.rel = 'preload';
-            link.as = 'style';
-            link.media = 'print';
-            
-            // Insert preload link
-            document.head.insertBefore(preloadLink, link);
-          }
-        }
-      });
-    </script>
   </head>
 
   <body>
